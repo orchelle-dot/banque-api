@@ -317,7 +317,6 @@
 
 <div class="container">
 
-  <!-- ── PAGE ACCUEIL ── -->
   <div class="page active" id="page-accueil">
     <div class="stats-row" id="stats-row">
       <div class="stat-card">
@@ -359,7 +358,6 @@
     </div>
   </div>
 
-  <!-- ── PAGE CRÉER ── -->
   <div class="page" id="page-creer">
     <div class="card">
       <h2>➕ Créer un nouveau compte bancaire</h2>
@@ -376,7 +374,6 @@
     </div>
   </div>
 
-  <!-- ── PAGE COMPTES ── -->
   <div class="page" id="page-comptes">
     <div class="card">
       <h2>📋 Liste de tous les comptes
@@ -388,7 +385,6 @@
     </div>
   </div>
 
-  <!-- ── PAGE OPÉRATIONS ── -->
   <div class="page" id="page-operations">
     <div class="card">
       <h2>💳 Effectuer une opération</h2>
@@ -423,7 +419,6 @@
   function purgerSolde(soldeVisuel) {
     if (typeof soldeVisuel === 'number') return soldeVisuel;
     if (!soldeVisuel) return 0;
-    // Supprime "FCFA" et les espaces, puis convertit en nombre
     const net = soldeVisuel.toString().replace('FCFA', '').replace(/\s/g, '');
     return parseFloat(net) || 0;
   }
@@ -456,7 +451,6 @@
       const liste = Array.isArray(data) ? data : [];
       document.getElementById('stat-comptes').textContent = liste.length;
       
-      // On purge le solde textuel avant de faire la somme
       const total = liste.reduce((s, c) => s + purgerSolde(c.solde), 0);
       document.getElementById('stat-solde').textContent = total.toLocaleString('fr-FR');
     } catch(e) {
@@ -489,7 +483,6 @@
         document.getElementById('new-titulaire').value = '';
         document.getElementById('new-solde').value = '';
       } else {
-        // Gestion flexible si la clé d'erreur s'appelle 'erreur', 'message' ou 'messageErreur'
         const msgErreur = data.erreur || data.message || 'Une erreur est survenue.';
         showAlert('alert-creer', '❌ ' + msgErreur, 'error');
       }
@@ -520,7 +513,6 @@
       }
 
       container.innerHTML = `<div class="comptes-grid">${liste.map(c => {
-        // On s'assure que le solde s'affiche proprement qu'il soit String ("12000 FCFA") ou Number (12000)
         const soldeAffichage = typeof c.solde === 'number' 
           ? c.solde.toLocaleString('fr-FR') + ' FCFA' 
           : c.solde;
@@ -580,6 +572,10 @@
         showAlert('alert-op',
           `${emoji} ${data.message || 'Opération réussie.'} Nouveau solde : ${data.nouveauSolde}`, 'success');
         document.getElementById('op-montant').value = '';
+
+        // Actualisation automatique du détail après l'opération !
+        await voirDetail();
+
       } else {
         const msgErreur = data.erreur || data.message || 'Erreur lors de l\'opération.';
         showAlert('alert-op', '❌ ' + msgErreur, 'error');

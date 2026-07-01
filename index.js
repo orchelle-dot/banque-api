@@ -1,24 +1,49 @@
 // ============================================================
 //   API BANCAIRE — Système de Transactions Bancaires
-//   Devoir 304
+//   Devoir 304 (Sauvegarde Persistante par Fichier)
 // ============================================================
 
 const express = require('express');
-const cors = require('cors'); // 1. Importer le package
+const cors = require('cors');
+const fs = require('fs'); // Pour lire et écrire dans un fichier
+const path = require('path');
 const app = express();
 
-app.use(cors()); // 2. Activer les CORS pour toutes les origines
-
+app.use(cors());
 app.use(express.json());
 
-let comptes = [];
-let prochainId = 1;
+const FILE_PATH = path.join(__dirname, 'comptes.json');
+
+// Fonctions utilitaires pour manipuler le fichier JSON
+function lireDonnees() {
+  try {
+    if (!fs.existsSync(FILE_PATH)) {
+      // Si le fichier n'existe pas, on l'initialise
+      const initialData = { comptes: [], prochainId: 1 };
+      fs.writeFileSync(FILE_PATH, JSON.stringify(initialData, null, 2));
+      return initialData;
+    }
+    const contenu = fs.readFileSync(FILE_PATH, 'utf-8');
+    return JSON.parse(contenu);
+  } catch (error) {
+    console.error("Erreur lors de la lecture du fichier JSON :", error);
+    return { comptes: [], prochainId: 1 };
+  }
+}
+
+function sauvegarderDonnees(data) {
+  try {
+    fs.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error("Erreur lors de l'écriture du fichier JSON :", error);
+  }
+}
 
 // Route reset pour les tests
 app.post('/api/reset', (req, res) => {
-comptes.length = 0;
-let prochainId = 1;
-return res.status(200).json({ message: 'Données réinitialisées' });
+  const data = { comptes: [], prochainId: 1 };
+  sauvegarderDonnees(data);
+  return res.status(200).json({ message: 'Données réinitialisées' });
 });
 
 // ROUTE 1 : Créer un compte
@@ -30,32 +55,40 @@ app.post('/api/comptes', (req, res) => {
   if (soldeInitial < 0) {
     return res.status(400).json({ erreur: "Le solde initial ne peut pas être négatif." });
   }
+
+  const data = lireDonnees();
+
   const nouveauCompte = {
-    id: prochainId++,
+    id: data.prochainId++,
     titulaire: titulaire,
     solde: soldeInitial || 0,
     dateCreation: new Date().toLocaleString('fr-FR'),
     historique: []
   };
-  comptes.push(nouveauCompte);
+
+  data.comptes.push(nouveauCompte);
+  sauvegarderDonnees(data); // Sauvegarde automatique
+
   return res.status(201).json(nouveauCompte);
 });
 
 // ROUTE 2 : Liste des comptes
 app.get('/api/comptes', (req, res) => {
-  if (comptes.length === 0) {
+  const data = lireDonnees();
+  if (data.comptes.length === 0) {
     return res.status(200).json({
       message: "Aucun compte bancaire enregistré pour l'instant.",
       comptes: []
     });
   }
-  return res.status(200).json(comptes);
+  return res.status(200).json(data.comptes);
 });
 
 // ROUTE 3 : Détail d'un compte
 app.get('/api/comptes/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const compte = comptes.find(c => c.id === id);
+  const data = lireDonnees();
+  const compte = data.comptes.find(c => c.id === id);
   if (!compte) {
     return res.status(404).json({ erreur: "Compte introuvable. Vérifiez l'identifiant." });
   }
@@ -72,19 +105,26 @@ app.get('/api/comptes/:id', (req, res) => {
 app.post('/api/comptes/:id/depot', (req, res) => {
   const id = parseInt(req.params.id);
   const { montant } = req.body;
-  const compte = comptes.find(c => c.id === id);
+  
+  const data = lireDonnees();
+  const compte = data.comptes.find(c => c.id === id);
+
   if (!compte) {
     return res.status(404).json({ erreur: "Compte introuvable. Vérifiez l'identifiant." });
   }
   if (!montant || montant <= 0) {
     return res.status(400).json({ erreur: "Le montant du dépôt doit être supérieur à zéro." });
   }
+
   compte.solde += montant;
   compte.historique.push({
     type: "Dépôt",
     montant: `${montant} FCFA`,
     dateEtHeure: new Date().toLocaleString('fr-FR')
   });
+
+  sauvegarderDonnees(data); // Sauvegarde après modification du solde
+
   return res.status(200).json({
     message: "Dépôt effectué avec succès.",
     titulaire: compte.titulaire,
@@ -97,7 +137,10 @@ app.post('/api/comptes/:id/depot', (req, res) => {
 app.post('/api/comptes/:id/retrait', (req, res) => {
   const id = parseInt(req.params.id);
   const { montant } = req.body;
-  const compte = comptes.find(c => c.id === id);
+
+  const data = lireDonnees();
+  const compte = data.comptes.find(c => c.id === id);
+
   if (!compte) {
     return res.status(404).json({ erreur: "Compte introuvable. Vérifiez l'identifiant." });
   }
@@ -110,12 +153,16 @@ app.post('/api/comptes/:id/retrait', (req, res) => {
       soldeActuel: compte.solde
     });
   }
+
   compte.solde -= montant;
   compte.historique.push({
     type: "Retrait",
     montant: `${montant} FCFA`,
     dateEtHeure: new Date().toLocaleString('fr-FR')
   });
+
+  sauvegarderDonnees(data); // Sauvegarde après modification du solde
+
   return res.status(200).json({
     message: "Retrait effectué avec succès.",
     titulaire: compte.titulaire,
@@ -137,9 +184,9 @@ if (require.main === module) {
     console.log('======================================');
   });
   app.resetData = () => {
-  comptes = [];
-  prochainId = 1;
-};
+    const data = { comptes: [], prochainId: 1 };
+    sauvegarderDonnees(data);
+  };
 }
 
 module.exports = app;
